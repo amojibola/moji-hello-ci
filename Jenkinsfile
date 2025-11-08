@@ -4,7 +4,8 @@ pipeline {
   environment {
     IMAGE = "mojitech/moji-hello-ci"
     TAG   = "build-${env.BUILD_NUMBER}"
-    DOCKER = "/usr/local/bin/docker"
+    DOCKER = "/usr/local/bin/docker"   // stable path Jenkins can see
+    PATH  = "/usr/local/bin:/usr/bin:/bin" // ensure docker path is in PATH for shell steps
   }
 
   stages {
@@ -59,7 +60,8 @@ pipeline {
 
     stage('Deploy (dev)') {
       steps {
-        sh 'bash deploy/dev.sh $IMAGE:$TAG'
+        // Pass DOCKER into the script so it uses the same docker binary
+        sh 'DOCKER="$DOCKER" bash deploy/dev.sh $IMAGE:$TAG'
       }
     }
   }
