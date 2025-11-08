@@ -38,3 +38,10 @@ pipeline {
     always { sh '"$DOCKER" rm -f moji-hello-ci-test 2>/dev/null || true' }
   }
 }
+
+    stage('Deploy (dev)') {
+      steps {
+        sh 'bash deploy/dev.sh $IMAGE:$TAG'
+      }
+    }
+
