@@ -25,7 +25,7 @@ IMAGE="${1:?Usage: dev.sh <image:tag>}"
 PORT_CHOSEN=""
 for PORT in $(seq 8000 8010); do
   set +e
-  CID=$("$DOCKER_BIN" run -d --name moji-hello-dev -p "${PORT}:8000" "$IMAGE" 2>&1)
+  OUT=$("$DOCKER_BIN" run -d --name moji-hello-dev -p "${PORT}:8000" "$IMAGE" 2>&1)
   STATUS=$?
   set -e
   if [ $STATUS -eq 0 ]; then
@@ -33,8 +33,7 @@ for PORT in $(seq 8000 8010); do
     echo "✅ Started moji-hello-dev on localhost:${PORT_CHOSEN}"
     break
   else
-    echo "⚠️  Port ${PORT} busy, trying next... (${CID})"
-    # Ensure no half-created container lingers
+    echo "⚠️  Port ${PORT} busy, trying next... (${OUT})"
     "$DOCKER_BIN" rm -f moji-hello-dev >/dev/null 2>&1 || true
   fi
 done
@@ -44,7 +43,24 @@ if [ -z "${PORT_CHOSEN}" ]; then
   exit 125
 fi
 
-# Health check against the running container via container network
-"$DOCKER_BIN" run --rm --network container:moji-hello-dev curlimages/curl:8.11.0 -s http://localhost:8000/healthz | grep '"ok":true'
+# Health check (retry up to 20s) via the container's network namespace
+OK=0
+for i in $(seq 1 20); do
+  if "$DOCKER_BIN" run --rm --network container:moji-hello-dev curlimages/curl:8.11.0 \
+        -s http://localhost:8000/healthz | grep -q '"ok":true'; then
+    OK=1
+    echo "✅ Health check passed on attempt ${i}"
+    break
+  fi
+  echo "⏳ Waiting for app to become healthy... (${i}/20)"
+  sleep 1
+done
+
+if [ "$OK" -ne 1 ]; then
+  echo "❌ Health check failed after waiting"
+  echo "---- Container logs ----"
+  "$DOCKER_BIN" logs moji-hello-dev || true
+  exit 1
+fi
 
 echo "✅ Deployed $IMAGE to container moji-hello-dev (http://localhost:${PORT_CHOSEN})"
